@@ -42,10 +42,17 @@ export default function LiveCount() {
   settingsRef.current = settings;
   lineRef.current = line;
 
+  const [zoom, setZoom] = useState(1);
+  const zoomRef = useRef(1);
+  zoomRef.current = zoom;
+
   const camera = useCamera();
   const containerRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const dragEndpoint = useRef<"a" | "b" | null>(null);
+  // Track all active pointers for pinch-to-zoom
+  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchDistRef = useRef<number | null>(null);
 
   // ---- Load session + model ----
   useEffect(() => {
@@ -165,6 +172,7 @@ export default function LiveCount() {
         confidence: payload.confidence,
         flagged: payload.flagged,
         reason: payload.reason || undefined,
+        snapshotUrl: payload.snapshotUrl,
       };
       await addEvent(event);
 
@@ -232,21 +240,36 @@ export default function LiveCount() {
     return () => clearTimeout(id);
   }, [session, settings, navigate]);
 
-  // ---- Line dragging ----
+  // ---- Line dragging + pinch-to-zoom ----
+
+  // De-zoom a client position back to the unscaled video coordinate space.
+  const deZoom = (clientX: number, clientY: number, rect: DOMRect) => {
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    return {
+      x: (clientX - cx) / zoomRef.current + cx,
+      y: (clientY - cy) / zoomRef.current + cy,
+    };
+  };
+
   const onPointerDown = (e: React.PointerEvent) => {
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    // Two fingers down → start pinch; cancel any in-progress line drag.
+    if (pointersRef.current.size === 2) {
+      dragEndpoint.current = null;
+      const pts = [...pointersRef.current.values()];
+      pinchDistRef.current = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+      return;
+    }
+
     if (!containerRef.current || !line) return;
     const v = camera.videoRef.current;
     const rect = containerRef.current.getBoundingClientRect();
-    const { nx, ny } = clientToNormalized(
-      e.clientX,
-      e.clientY,
-      rect,
-      v?.videoWidth || 1,
-      v?.videoHeight || 1
-    );
+    const { x, y } = deZoom(e.clientX, e.clientY, rect);
+    const { nx, ny } = clientToNormalized(x, y, rect, v?.videoWidth || 1, v?.videoHeight || 1);
     const da = Math.hypot(nx - line.ax, ny - line.ay);
     const db = Math.hypot(nx - line.bx, ny - line.by);
-    // Grab the nearer endpoint if the touch is reasonably close to it.
     if (Math.min(da, db) < 0.12) {
       dragEndpoint.current = da <= db ? "a" : "b";
       (e.target as Element).setPointerCapture?.(e.pointerId);
@@ -254,16 +277,22 @@ export default function LiveCount() {
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    // Pinch zoom
+    if (pointersRef.current.size === 2 && pinchDistRef.current !== null) {
+      const pts = [...pointersRef.current.values()];
+      const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+      setZoom((z) => Math.min(5, Math.max(1, z * (dist / pinchDistRef.current!))));
+      pinchDistRef.current = dist;
+      return;
+    }
+
     if (!dragEndpoint.current || !containerRef.current || !line) return;
     const v = camera.videoRef.current;
     const rect = containerRef.current.getBoundingClientRect();
-    const { nx, ny } = clientToNormalized(
-      e.clientX,
-      e.clientY,
-      rect,
-      v?.videoWidth || 1,
-      v?.videoHeight || 1
-    );
+    const { x, y } = deZoom(e.clientX, e.clientY, rect);
+    const { nx, ny } = clientToNormalized(x, y, rect, v?.videoWidth || 1, v?.videoHeight || 1);
     const next =
       dragEndpoint.current === "a"
         ? { ...line, ax: nx, ay: ny }
@@ -272,9 +301,11 @@ export default function LiveCount() {
     lineRef.current = next;
   };
 
-  const onPointerUp = () => {
+  const onPointerUp = (e: React.PointerEvent) => {
+    pointersRef.current.delete(e.pointerId);
+    if (pointersRef.current.size < 2) pinchDistRef.current = null;
     if (dragEndpoint.current && line) updateLine(line);
-    dragEndpoint.current = null;
+    if (pointersRef.current.size === 0) dragEndpoint.current = null;
   };
 
   // ---- Stop & view summary ----
@@ -306,22 +337,28 @@ export default function LiveCount() {
       {/* Camera + overlay */}
       <div
         ref={containerRef}
-        className="absolute inset-0"
+        className="absolute inset-0 overflow-hidden"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
+        style={{ touchAction: "none" }}
       >
-        <video
-          ref={camera.videoRef}
-          className="absolute inset-0 h-full w-full object-cover"
-          playsInline
-          muted
-        />
-        <canvas
-          ref={overlayRef}
-          className="absolute inset-0 h-full w-full object-cover"
-        />
+        <div
+          className="absolute inset-0"
+          style={{ transform: `scale(${zoom})`, transformOrigin: "center center" }}
+        >
+          <video
+            ref={camera.videoRef}
+            className="absolute inset-0 h-full w-full object-cover"
+            playsInline
+            muted
+          />
+          <canvas
+            ref={overlayRef}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        </div>
       </div>
 
       {/* Top counters */}
@@ -378,6 +415,26 @@ export default function LiveCount() {
           >
             ⚙ Settings
           </button>
+
+          {/* Zoom controls */}
+          <div className="flex items-center gap-1 rounded-xl bg-black/55 px-2 py-1 ring-1 ring-white/20">
+            <button
+              onClick={() => setZoom((z) => Math.max(1, +(z - 0.5).toFixed(1)))}
+              className="px-2 py-1 text-lg font-bold"
+            >
+              −
+            </button>
+            <span className="min-w-[36px] text-center text-xs tabular-nums">
+              {zoom.toFixed(1)}×
+            </span>
+            <button
+              onClick={() => setZoom((z) => Math.min(5, +(z + 0.5).toFixed(1)))}
+              className="px-2 py-1 text-lg font-bold"
+            >
+              +
+            </button>
+          </div>
+
           <DevFilePicker onPick={camera.useFile} compact />
           <button
             onClick={finish}

@@ -17,6 +17,7 @@ export interface CountPayload {
   confidence: number;
   flagged: boolean;
   reason: string;
+  snapshotUrl?: string;
 }
 
 export interface CounterStats {
@@ -127,7 +128,7 @@ export function useCounter({
             if (dir) {
               t.counted = true;
               const flag = useMotion
-                ? { flagged: false, reason: "" } // motion blobs don't have a confidence score to flag on
+                ? { flagged: false, reason: "" }
                 : evaluateFlag(t, lastTracks, s);
               onCountRef.current({
                 direction: dir,
@@ -135,6 +136,7 @@ export function useCounter({
                 confidence: t.score,
                 flagged: flag.flagged,
                 reason: flag.reason,
+                snapshotUrl: captureSnapshot(video),
               });
             }
           }
@@ -168,6 +170,19 @@ export function useCounter({
   }, [model, enabled, videoRef, overlayRef, getSettings, getLine]);
 
   return stats;
+}
+
+function captureSnapshot(video: HTMLVideoElement): string | undefined {
+  if (!video.videoWidth) return undefined;
+  try {
+    const c = document.createElement("canvas");
+    c.width = 160;
+    c.height = 90;
+    c.getContext("2d")!.drawImage(video, 0, 0, 160, 90);
+    return c.toDataURL("image/jpeg", 0.5);
+  } catch {
+    return undefined;
+  }
 }
 
 function drawOverlay(

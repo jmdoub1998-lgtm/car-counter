@@ -113,6 +113,8 @@ export interface CountEvent {
   flagged: boolean;
   reason?: string;
   clipId?: string;
+  /** Low-res JPEG data URL captured at the crossing moment (160×90). */
+  snapshotUrl?: string;
 }
 
 export interface Clip {

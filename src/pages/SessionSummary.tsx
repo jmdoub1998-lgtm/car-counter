@@ -126,6 +126,34 @@ export default function SessionSummary() {
         </div>
       </Section>
 
+      {/* Detection snapshots */}
+      {events.some((e) => e.snapshotUrl) && (
+        <Section title={`Detection snapshots (${events.filter((e) => e.snapshotUrl).length})`}>
+          <p className="mb-2 text-xs text-slate-400">
+            Low-resolution frame captured at each crossing moment.
+          </p>
+          <div className="grid grid-cols-3 gap-1 sm:grid-cols-4">
+            {events
+              .filter((e) => e.snapshotUrl)
+              .map((e) => (
+                <div key={e.id} className="relative rounded overflow-hidden bg-slate-800">
+                  <img
+                    src={e.snapshotUrl}
+                    alt={`${e.vehicleType} ${e.direction}`}
+                    className="w-full aspect-video object-cover"
+                  />
+                  <div className="absolute bottom-0 inset-x-0 bg-black/60 px-1 py-0.5 text-[10px] flex justify-between">
+                    <span className={e.direction === "A" ? "text-cyan-300" : "text-amber-300"}>
+                      {e.direction}
+                    </span>
+                    <span className="text-slate-300 capitalize">{e.vehicleType}</span>
+                  </div>
+                </div>
+              ))}
+          </div>
+        </Section>
+      )}
+
       {/* Flagged clips */}
       {clipUrls.length > 0 && (
         <Section title={`Flagged clips (${clipUrls.length})`}>
