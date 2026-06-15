@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Maskable: keep important art within the central 80% safe zone. -->
+  <rect width="512" height="512" fill="#0f172a" />
+  <g transform="translate(256 256)">
+    <g transform="translate(-160 -110)">
+      <path d="M40 150 L70 60 a40 40 0 0 1 38 -28 h164 a40 40 0 0 1 38 28 l30 90"
+            fill="none" stroke="#22d3ee" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="20" y="140" width="280" height="70" rx="26" fill="#22d3ee"/>
+      <circle cx="86" cy="210" r="30" fill="#0f172a" stroke="#e2e8f0" stroke-width="14"/>
+      <circle cx="234" cy="210" r="30" fill="#0f172a" stroke="#e2e8f0" stroke-width="14"/>
+      <line x1="160" y1="0" x2="160" y2="260" stroke="#f59e0b" stroke-width="14" stroke-dasharray="20 16"/>
+    </g>
+  </g>
+</svg>
