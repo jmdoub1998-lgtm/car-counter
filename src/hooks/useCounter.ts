@@ -36,6 +36,7 @@ interface UseCounterArgs {
   enabled: boolean;
   getSettings: () => SessionSettings;
   getLine: () => LineConfig;
+  getZoom: () => number;
   onCount: (payload: CountPayload) => void;
 }
 
@@ -46,6 +47,7 @@ export function useCounter({
   enabled,
   getSettings,
   getLine,
+  getZoom,
   onCount,
 }: UseCounterArgs): CounterStats {
   const [stats, setStats] = useState<CounterStats>({
@@ -82,6 +84,7 @@ export function useCounter({
     let lastDetect = 0;
     let lastTracks: Track[] = [];
     const fpsTimes: number[] = [];
+    let lastZoom = getZoom();
 
     const loop = async (now: number) => {
       if (stopped) return;
@@ -105,7 +108,13 @@ export function useCounter({
               bgAlpha: s.motionBgAlpha ?? DEFAULT_MOTION_SETTINGS.bgAlpha,
               minBlobPx: s.motionMinBlobPx ?? DEFAULT_MOTION_SETTINGS.minBlobPx,
             };
-            detections = motionRef.current.detect(video, ms);
+            const zoom = getZoom();
+            // Zoom changed → the background model is now wrong; reset it.
+            if (zoom !== lastZoom) {
+              motionRef.current.reset();
+              lastZoom = zoom;
+            }
+            detections = motionRef.current.detect(video, ms, zoom);
           } else {
             detections = await detectVehicles(
               model!,

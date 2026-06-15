@@ -81,13 +81,20 @@ export class MotionDetector {
    */
   detect(
     video: HTMLVideoElement,
-    settings: MotionSettings
+    settings: MotionSettings,
+    zoom = 1
   ): Detection[] {
     const vw = video.videoWidth;
     const vh = video.videoHeight;
     if (!vw || !vh || video.readyState < 2) return [];
 
-    this.ctx.drawImage(video, 0, 0, WORK_W, WORK_H);
+    // Crop to the zoomed viewport (centered) so the detector sees only what
+    // the user sees — this cuts edge noise and improves detail in the ROI.
+    const srcW = vw / zoom;
+    const srcH = vh / zoom;
+    const srcX = (vw - srcW) / 2;
+    const srcY = (vh - srcH) / 2;
+    this.ctx.drawImage(video, srcX, srcY, srcW, srcH, 0, 0, WORK_W, WORK_H);
     const frame = this.ctx.getImageData(0, 0, WORK_W, WORK_H).data;
 
     // Grayscale
@@ -120,15 +127,15 @@ export class MotionDetector {
     // Find moving blobs.
     const blobs = findBlobs(mask, WORK_W, WORK_H, settings.minBlobPx);
 
-    // Scale to source video coordinates and classify by size.
-    const scaleX = vw / WORK_W;
-    const scaleY = vh / WORK_H;
+    // Scale back to full source-video coordinates (not just the cropped region).
+    const scaleX = srcW / WORK_W;
+    const scaleY = srcH / WORK_H;
 
     return blobs.map((b) => {
       const w = (b.maxX - b.minX) * scaleX;
       const h = (b.maxY - b.minY) * scaleY;
       return {
-        bbox: [b.minX * scaleX, b.minY * scaleY, w, h] as [
+        bbox: [srcX + b.minX * scaleX, srcY + b.minY * scaleY, w, h] as [
           number,
           number,
           number,
