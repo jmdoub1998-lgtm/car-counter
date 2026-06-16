@@ -51,6 +51,8 @@ export interface SessionSettings {
   motionBgAlpha: number;
   /** Min blob area in pixels at 320×180 working resolution. */
   motionMinBlobPx: number;
+  /** Multiplier on vehicle-type size thresholds; tune if car/truck/moto sizing is off. */
+  motionSizeScale: number;
 
   // ---- Shared settings ----
   /** Run detection at most once every N ms (throttle for heat/FPS). */
@@ -79,6 +81,7 @@ export const DEFAULT_SETTINGS: SessionSettings = {
   motionThreshold: 18,
   motionBgAlpha: 0.002,
   motionMinBlobPx: 60,
+  motionSizeScale: 1,
 
   detectionIntervalMs: 80,
   showBoxes: true,

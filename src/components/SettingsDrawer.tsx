@@ -90,6 +90,13 @@ export default function SettingsDrawer({
               value={settings.motionBgAlpha}
               onChange={(v) => set({ motionBgAlpha: v })}
             />
+            <SliderRow
+              label={`Vehicle size calibration: ${settings.motionSizeScale.toFixed(2)}×`}
+              hint="Increase if vehicles are classified one size too big (cars showing as trucks, motorcycles as cars). Decrease if too small."
+              min={0.3} max={3} step={0.05}
+              value={settings.motionSizeScale}
+              onChange={(v) => set({ motionSizeScale: v })}
+            />
             <p className="mt-1 text-xs text-slate-400">
               Vehicle type (car / truck / bus / motorcycle) is estimated from blob size, not
               appearance — counts are reliable, type breakdown is approximate.

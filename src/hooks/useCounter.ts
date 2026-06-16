@@ -107,6 +107,7 @@ export function useCounter({
               diffThreshold: s.motionThreshold ?? DEFAULT_MOTION_SETTINGS.diffThreshold,
               bgAlpha: s.motionBgAlpha ?? DEFAULT_MOTION_SETTINGS.bgAlpha,
               minBlobPx: s.motionMinBlobPx ?? DEFAULT_MOTION_SETTINGS.minBlobPx,
+              sizeScale: s.motionSizeScale ?? DEFAULT_MOTION_SETTINGS.sizeScale,
             };
             const zoom = getZoom();
             // Zoom changed → the background model is now wrong; reset it.

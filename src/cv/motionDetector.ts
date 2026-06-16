@@ -51,12 +51,20 @@ export interface MotionSettings {
    * At a 12-storey height, a car ≈ 60–200 px, truck ≈ 200–500 px.
    */
   minBlobPx: number;
+  /**
+   * Multiplier applied when classifying vehicle type by blob size. Increase
+   * if vehicles are classified one size too big for your camera's distance/
+   * angle (e.g. cars showing up as trucks, motorcycles as cars); decrease if
+   * too small. Defaults to 1 (the built-in size thresholds).
+   */
+  sizeScale: number;
 }
 
 export const DEFAULT_MOTION_SETTINGS: MotionSettings = {
   diffThreshold: 18,
   bgAlpha: 0.002,
   minBlobPx: 60,
+  sizeScale: 1,
 };
 
 export class MotionDetector {
@@ -141,8 +149,8 @@ export class MotionDetector {
           number,
           number,
         ],
-        type: typeFromBlob(b),
-        score: Math.min(0.5 + b.area / (settings.minBlobPx * 6), 0.99),
+        type: typeFromBlob(b, zoom, settings.sizeScale),
+        score: Math.min(0.5 + b.area / (zoom * zoom) / (settings.minBlobPx * 6), 0.99),
       };
     });
   }
@@ -269,11 +277,16 @@ function findBlobs(
  * Heuristic vehicle type from blob area (pixels at 320×180).
  * At a 12-storey overhead view the size ordering still holds even if the
  * absolute pixel counts differ from the defaults below. Users can tune
- * diffThreshold / minBlobPx to refine.
+ * sizeScale (or diffThreshold / minBlobPx) to refine.
+ *
+ * Area is normalized by zoom² because digital zoom crops the working frame —
+ * the same physical vehicle fills proportionally more of it, so raw area
+ * would otherwise misclassify vehicles as the zoom level changes.
  */
-function typeFromBlob(b: Blob): VehicleType {
-  if (b.area < 120) return "motorcycle";
-  if (b.area < 400) return "car";
-  if (b.area < 900) return "truck";
+function typeFromBlob(b: Blob, zoom: number, sizeScale: number): VehicleType {
+  const area = b.area / (zoom * zoom) / sizeScale;
+  if (area < 120) return "motorcycle";
+  if (area < 400) return "car";
+  if (area < 900) return "truck";
   return "bus";
 }

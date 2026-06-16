@@ -431,6 +431,13 @@ export default function LiveCount() {
             onChange={(v) => updateSettings({ ...settings, motionMinBlobPx: v })}
           />
           <QuickSlider
+            label={`Size calibration: ${settings.motionSizeScale.toFixed(2)}×`}
+            hint="Raise if cars show as trucks or motorcycles show as cars."
+            min={0.3} max={3} step={0.05}
+            value={settings.motionSizeScale}
+            onChange={(v) => updateSettings({ ...settings, motionSizeScale: v })}
+          />
+          <QuickSlider
             label={`Check rate: ${settings.detectionIntervalMs} ms`}
             hint="Lower = catches fast vehicles, uses more battery."
             min={50} max={400} step={10}
