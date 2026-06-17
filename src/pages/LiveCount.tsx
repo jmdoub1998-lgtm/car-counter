@@ -222,9 +222,11 @@ export default function LiveCount() {
     onCount,
   });
 
-  // Watchdog wired to live FPS (restart camera on stall).
+  // Watchdog only for COCO-SSD mode — motion detection is synchronous pixel ops
+  // and can never stall. Enabling it in motion mode caused spurious camera restarts
+  // that flashed the start overlay and reset the background model.
   const stalled = useWatchdog(
-    running,
+    running && !isMotionMode,
     stats.fps,
     () => {
       if (camera.stream) camera.startCamera();
