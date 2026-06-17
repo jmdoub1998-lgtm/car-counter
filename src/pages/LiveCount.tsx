@@ -47,6 +47,16 @@ export default function LiveCount() {
   const zoomRef = useRef(1);
   zoomRef.current = zoom;
 
+  const [isLandscape, setIsLandscape] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(orientation: landscape)").matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(orientation: landscape)");
+    const handler = (e: MediaQueryListEvent) => setIsLandscape(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
   const camera = useCamera();
   const containerRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
@@ -152,11 +162,10 @@ export default function LiveCount() {
   );
 
   // ---- Clip recorder + wake lock + watchdog ----
-  const { saveClip } = useClipRecorder(
-    camera.stream,
-    settings?.clipSeconds ?? 8,
-    running && !!settings?.clipsEnabled
-  );
+  // Clip recording disabled: MediaRecorder stop/restart stalls the camera pipeline
+  // on mobile (iPhone), causing visible flashes and detection dropouts. Snapshots
+  // are captured instead (see captureSnapshot in useCounter).
+  const { saveClip } = useClipRecorder(camera.stream, settings?.clipSeconds ?? 8, false);
   const wake = useWakeLock(running);
 
   // ---- Counting callback ----
@@ -337,7 +346,7 @@ export default function LiveCount() {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-black no-select">
-      {/* Camera + overlay */}
+      {/* Camera + overlay — always full-screen behind everything */}
       <div
         ref={containerRef}
         className="absolute inset-0 overflow-hidden"
@@ -364,23 +373,121 @@ export default function LiveCount() {
         </div>
       </div>
 
-      {/* Top counters */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-stretch gap-2 p-3">
-        <Counter label={aLabel} value={counts.A} color="text-cyan-300" ring="ring-cyan-400/60" />
-        <Counter label={bLabel} value={counts.B} color="text-amber-300" ring="ring-amber-400/60" />
-        <div className="flex min-w-[72px] flex-col items-center justify-center rounded-xl bg-black/55 px-3 py-2 ring-1 ring-white/20">
-          <span className="text-xs text-slate-300">Total</span>
-          <span className="text-2xl font-bold tabular-nums">{total}</span>
+      {/* ── LANDSCAPE layout: single top bar with counters + controls ── */}
+      {isLandscape && camera.status === "running" && (
+        <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-2 bg-black/70 px-3 py-2">
+          {/* Compact inline counters */}
+          <div className="flex flex-shrink-0 items-center gap-3">
+            <InlineCounter label={aLabel} value={counts.A} color="text-cyan-300" />
+            <div className="h-5 w-px bg-slate-600" />
+            <InlineCounter label={bLabel} value={counts.B} color="text-amber-300" />
+            <div className="h-5 w-px bg-slate-600" />
+            <InlineCounter label="Total" value={total} color="text-white" />
+          </div>
+          {/* Status text — fills remaining space, truncated */}
+          <span className="min-w-0 flex-1 truncate text-xs text-slate-400">
+            {statusLine}{wake.held ? " · locked" : ""}
+          </span>
+          {/* Controls */}
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="rounded-lg bg-black/50 px-3 py-2 text-sm ring-1 ring-white/20"
+          >
+            ⚙
+          </button>
+          {isMotionMode && (
+            <button
+              onClick={() => setTuneOpen((o) => !o)}
+              className={`rounded-lg px-3 py-2 text-sm ring-1 ring-white/20 ${tuneOpen ? "bg-cyan-500 text-slate-900" : "bg-black/50"}`}
+            >
+              Tune
+            </button>
+          )}
+          <div className="flex items-center gap-0.5 rounded-lg bg-black/50 px-1.5 py-1 ring-1 ring-white/20">
+            <button
+              onClick={() => setZoom((z) => Math.max(1, +(z - 0.5).toFixed(1)))}
+              className="px-2 py-1 text-base font-bold"
+            >
+              −
+            </button>
+            <span className="min-w-[32px] text-center text-xs tabular-nums">{zoom.toFixed(1)}×</span>
+            <button
+              onClick={() => setZoom((z) => Math.min(5, +(z + 0.5).toFixed(1)))}
+              className="px-2 py-1 text-base font-bold"
+            >
+              +
+            </button>
+          </div>
+          <button
+            onClick={finish}
+            className="rounded-lg bg-red-500 px-3 py-2 text-sm font-semibold text-white"
+          >
+            Stop
+          </button>
         </div>
-      </div>
+      )}
 
-      {/* Status */}
-      <div className="absolute left-3 top-[88px] rounded-lg bg-black/50 px-2 py-1 text-xs text-slate-200">
-        {statusLine}
-        {wake.held ? " · screen lock held" : ""}
-      </div>
+      {/* ── PORTRAIT layout: top counters + status + bottom controls ── */}
+      {!isLandscape && (
+        <>
+          <div className="pointer-events-none absolute inset-x-0 top-0 flex items-stretch gap-2 p-3">
+            <Counter label={aLabel} value={counts.A} color="text-cyan-300" ring="ring-cyan-400/60" />
+            <Counter label={bLabel} value={counts.B} color="text-amber-300" ring="ring-amber-400/60" />
+            <div className="flex min-w-[72px] flex-col items-center justify-center rounded-xl bg-black/55 px-3 py-2 ring-1 ring-white/20">
+              <span className="text-xs text-slate-300">Total</span>
+              <span className="text-2xl font-bold tabular-nums">{total}</span>
+            </div>
+          </div>
+          <div className="absolute left-3 top-[88px] rounded-lg bg-black/50 px-2 py-1 text-xs text-slate-200">
+            {statusLine}
+            {wake.held ? " · screen lock held" : ""}
+          </div>
+          {camera.status === "running" && (
+            <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 p-3">
+              <button
+                onClick={() => setSettingsOpen(true)}
+                className="rounded-xl bg-black/55 px-4 py-3 text-sm ring-1 ring-white/20"
+              >
+                ⚙
+              </button>
+              {isMotionMode && (
+                <button
+                  onClick={() => setTuneOpen((o) => !o)}
+                  className={`rounded-xl px-3 py-3 text-sm ring-1 ring-white/20 ${tuneOpen ? "bg-cyan-500 text-slate-900" : "bg-black/55"}`}
+                >
+                  Tune
+                </button>
+              )}
+              <div className="flex items-center gap-1 rounded-xl bg-black/55 px-2 py-1 ring-1 ring-white/20">
+                <button
+                  onClick={() => setZoom((z) => Math.max(1, +(z - 0.5).toFixed(1)))}
+                  className="px-2 py-1 text-lg font-bold"
+                >
+                  −
+                </button>
+                <span className="min-w-[36px] text-center text-xs tabular-nums">
+                  {zoom.toFixed(1)}×
+                </span>
+                <button
+                  onClick={() => setZoom((z) => Math.min(5, +(z + 0.5).toFixed(1)))}
+                  className="px-2 py-1 text-lg font-bold"
+                >
+                  +
+                </button>
+              </div>
+              <DevFilePicker onPick={camera.useFile} compact />
+              <button
+                onClick={finish}
+                className="rounded-xl bg-red-500 px-4 py-3 text-sm font-semibold text-white"
+              >
+                Stop
+              </button>
+            </div>
+          )}
+        </>
+      )}
 
-      {/* Start overlay if camera not running */}
+      {/* Start overlay — covers everything when camera not yet running */}
       {camera.status !== "running" && (
         <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 bg-black/70 p-6 text-center">
           <p className="max-w-xs text-slate-200">
@@ -409,12 +516,16 @@ export default function LiveCount() {
         </div>
       )}
 
-      {/* Quick-tune panel (motion detection sliders) */}
+      {/* Quick-tune panel — above bottom bar (portrait) or below top bar (landscape) */}
       {camera.status === "running" && tuneOpen && settings && isMotionMode && (
-        <div className="absolute inset-x-3 bottom-20 z-10 rounded-2xl bg-black/85 p-4 ring-1 ring-white/20">
+        <div
+          className={`absolute inset-x-3 z-10 rounded-2xl bg-black/85 p-4 ring-1 ring-white/20 ${
+            isLandscape ? "top-14 max-h-[75vh] overflow-y-auto" : "bottom-20"
+          }`}
+        >
           <div className="mb-3 flex items-center justify-between">
             <span className="text-sm font-semibold">Detection tuning</span>
-            <button onClick={() => setTuneOpen(false)} className="text-slate-400 text-lg leading-none">✕</button>
+            <button onClick={() => setTuneOpen(false)} className="text-lg leading-none text-slate-400">✕</button>
           </div>
           <QuickSlider
             label={`Sensitivity: ${settings.motionThreshold}`}
@@ -444,54 +555,6 @@ export default function LiveCount() {
             value={settings.detectionIntervalMs}
             onChange={(v) => updateSettings({ ...settings, detectionIntervalMs: v })}
           />
-        </div>
-      )}
-
-      {/* Bottom controls (only while the live view is active) */}
-      {camera.status === "running" && (
-        <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 p-3">
-          <button
-            onClick={() => setSettingsOpen(true)}
-            className="rounded-xl bg-black/55 px-4 py-3 text-sm ring-1 ring-white/20"
-          >
-            ⚙
-          </button>
-
-          {isMotionMode && (
-            <button
-              onClick={() => setTuneOpen((o) => !o)}
-              className={`rounded-xl px-3 py-3 text-sm ring-1 ring-white/20 ${tuneOpen ? "bg-cyan-500 text-slate-900" : "bg-black/55"}`}
-            >
-              Tune
-            </button>
-          )}
-
-          {/* Zoom controls */}
-          <div className="flex items-center gap-1 rounded-xl bg-black/55 px-2 py-1 ring-1 ring-white/20">
-            <button
-              onClick={() => setZoom((z) => Math.max(1, +(z - 0.5).toFixed(1)))}
-              className="px-2 py-1 text-lg font-bold"
-            >
-              −
-            </button>
-            <span className="min-w-[36px] text-center text-xs tabular-nums">
-              {zoom.toFixed(1)}×
-            </span>
-            <button
-              onClick={() => setZoom((z) => Math.min(5, +(z + 0.5).toFixed(1)))}
-              className="px-2 py-1 text-lg font-bold"
-            >
-              +
-            </button>
-          </div>
-
-          <DevFilePicker onPick={camera.useFile} compact />
-          <button
-            onClick={finish}
-            className="rounded-xl bg-red-500 px-4 py-3 text-sm font-semibold text-white"
-          >
-            Stop
-          </button>
         </div>
       )}
 
@@ -526,6 +589,15 @@ function Counter({
     <div className={`flex flex-1 flex-col items-center rounded-xl bg-black/55 px-3 py-2 ring-1 ${ring}`}>
       <span className="max-w-full truncate text-xs text-slate-200">{label}</span>
       <span className={`text-3xl font-bold tabular-nums ${color}`}>{value}</span>
+    </div>
+  );
+}
+
+function InlineCounter({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div className="flex items-baseline gap-1">
+      <span className="text-xs text-slate-400">{label}</span>
+      <span className={`text-xl font-bold tabular-nums ${color}`}>{value}</span>
     </div>
   );
 }

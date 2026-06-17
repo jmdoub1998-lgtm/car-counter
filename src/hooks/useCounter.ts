@@ -102,6 +102,7 @@ export function useCounter({
         try {
           let detections: Detection[];
 
+          const zoom = getZoom();
           if (useMotion) {
             const ms: MotionSettings = {
               diffThreshold: s.motionThreshold ?? DEFAULT_MOTION_SETTINGS.diffThreshold,
@@ -109,7 +110,6 @@ export function useCounter({
               minBlobPx: s.motionMinBlobPx ?? DEFAULT_MOTION_SETTINGS.minBlobPx,
               sizeScale: s.motionSizeScale ?? DEFAULT_MOTION_SETTINGS.sizeScale,
             };
-            const zoom = getZoom();
             // Zoom changed → the background model is now wrong; reset it.
             if (zoom !== lastZoom) {
               motionRef.current.reset();
@@ -146,7 +146,7 @@ export function useCounter({
                 confidence: t.score,
                 flagged: flag.flagged,
                 reason: flag.reason,
-                snapshotUrl: captureSnapshot(video),
+                snapshotUrl: captureSnapshot(video, zoom),
               });
             }
           }
@@ -182,13 +182,19 @@ export function useCounter({
   return stats;
 }
 
-function captureSnapshot(video: HTMLVideoElement): string | undefined {
+function captureSnapshot(video: HTMLVideoElement, zoom = 1): string | undefined {
   if (!video.videoWidth) return undefined;
   try {
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    const srcW = vw / zoom;
+    const srcH = vh / zoom;
+    const srcX = (vw - srcW) / 2;
+    const srcY = (vh - srcH) / 2;
     const c = document.createElement("canvas");
     c.width = 160;
     c.height = 90;
-    c.getContext("2d")!.drawImage(video, 0, 0, 160, 90);
+    c.getContext("2d")!.drawImage(video, srcX, srcY, srcW, srcH, 0, 0, 160, 90);
     return c.toDataURL("image/jpeg", 0.5);
   } catch {
     return undefined;
