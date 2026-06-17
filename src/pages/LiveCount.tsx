@@ -557,6 +557,18 @@ export default function LiveCount() {
             value={settings.detectionIntervalMs}
             onChange={(v) => updateSettings({ ...settings, detectionIntervalMs: v })}
           />
+          <div className="mt-3 border-t border-slate-700 pt-3">
+            <button
+              onClick={stats.resetBackground}
+              className="w-full rounded-lg bg-slate-700 py-2 text-sm font-medium active:bg-slate-600"
+            >
+              ↺ Reset background now
+            </button>
+            <p className="mt-1 text-xs text-slate-400">
+              Use after repositioning the camera. Rebuilds the background model from
+              the current frame. Counting resumes after ~1 second.
+            </p>
+          </div>
         </div>
       )}
 

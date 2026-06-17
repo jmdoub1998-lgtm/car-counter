@@ -1,9 +1,41 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import JSZip from "jszip";
 import type { Clip, CountEvent, Session } from "../types";
 import { VEHICLE_TYPES } from "../types";
 import { computeTotals, getClips, getEvents, getSession } from "../db/db";
 import { exportCsv, exportJson } from "../export/exporters";
+
+async function exportPhotosZip(
+  session: Session,
+  events: CountEvent[],
+  aLabel: string,
+  bLabel: string
+) {
+  const withPhotos = events.filter((e) => e.snapshotUrl);
+  if (!withPhotos.length) return;
+
+  const zip = new JSZip();
+  const folder = zip.folder("photos")!;
+
+  withPhotos.forEach((e, i) => {
+    const base64 = e.snapshotUrl!.replace(/^data:image\/\w+;base64,/, "");
+    const d = new Date(e.timestamp);
+    const p = (n: number) => String(n).padStart(2, "0");
+    const ts = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`;
+    const dir = (e.direction === "A" ? aLabel : bLabel).replace(/\W+/g, "_");
+    const name = `${String(i + 1).padStart(4, "0")}_${ts}_${dir}_${e.vehicleType}.jpg`;
+    folder.file(name, base64, { base64: true });
+  });
+
+  const blob = await zip.generateAsync({ type: "blob" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${session.name.replace(/\W+/g, "_")}_photos.zip`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export default function SessionSummary() {
   const { sessionId } = useParams();
@@ -11,6 +43,7 @@ export default function SessionSummary() {
   const [session, setSession] = useState<Session | null>(null);
   const [events, setEvents] = useState<CountEvent[]>([]);
   const [clips, setClips] = useState<Clip[]>([]);
+  const [exportingZip, setExportingZip] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -129,24 +162,41 @@ export default function SessionSummary() {
       {/* Detection snapshots */}
       {events.some((e) => e.snapshotUrl) && (
         <Section title={`Detection snapshots (${events.filter((e) => e.snapshotUrl).length})`}>
-          <p className="mb-2 text-xs text-slate-400">
-            Low-resolution frame captured at each crossing moment.
-          </p>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <p className="text-xs text-slate-400">
+              160×90 JPEG captured at each crossing. ZIP filenames include timestamp,
+              direction, and vehicle type.
+            </p>
+            <button
+              onClick={async () => {
+                setExportingZip(true);
+                try {
+                  await exportPhotosZip(session!, events, aLabel, bLabel);
+                } finally {
+                  setExportingZip(false);
+                }
+              }}
+              disabled={exportingZip}
+              className="flex-shrink-0 rounded-lg bg-slate-700 px-3 py-2 text-xs font-medium active:bg-slate-600 disabled:opacity-50"
+            >
+              {exportingZip ? "Packing…" : "⬇ Export ZIP"}
+            </button>
+          </div>
           <div className="grid grid-cols-3 gap-1 sm:grid-cols-4">
             {events
               .filter((e) => e.snapshotUrl)
               .map((e) => (
-                <div key={e.id} className="relative rounded overflow-hidden bg-slate-800">
+                <div key={e.id} className="relative overflow-hidden rounded bg-slate-800">
                   <img
                     src={e.snapshotUrl}
                     alt={`${e.vehicleType} ${e.direction}`}
-                    className="w-full aspect-video object-cover"
+                    className="aspect-video w-full object-cover"
                   />
-                  <div className="absolute bottom-0 inset-x-0 bg-black/60 px-1 py-0.5 text-[10px] flex justify-between">
+                  <div className="absolute inset-x-0 bottom-0 flex justify-between bg-black/60 px-1 py-0.5 text-[10px]">
                     <span className={e.direction === "A" ? "text-cyan-300" : "text-amber-300"}>
-                      {e.direction}
+                      {new Date(e.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                     </span>
-                    <span className="text-slate-300 capitalize">{e.vehicleType}</span>
+                    <span className="capitalize text-slate-300">{e.vehicleType}</span>
                   </div>
                 </div>
               ))}

@@ -53,6 +53,8 @@ export interface SessionSettings {
   motionMinBlobPx: number;
   /** Multiplier on vehicle-type size thresholds; tune if car/truck/moto sizing is off. */
   motionSizeScale: number;
+  /** Auto-reset the background model every N minutes (0 = off). Corrects lighting drift. */
+  motionBgResetIntervalMin: number;
 
   // ---- Shared settings ----
   /** Run detection at most once every N ms (throttle for heat/FPS). */
@@ -82,6 +84,7 @@ export const DEFAULT_SETTINGS: SessionSettings = {
   motionBgAlpha: 0.002,
   motionMinBlobPx: 60,
   motionSizeScale: 1,
+  motionBgResetIntervalMin: 0,
 
   detectionIntervalMs: 80,
   showBoxes: true,

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type * as cocoSsd from "@tensorflow-models/coco-ssd";
 import type { DirectionKey, LineConfig, SessionSettings, VehicleType } from "../types";
 import { detectVehicles, liveTensorCount, type Detection } from "../cv/detector";
@@ -26,6 +26,8 @@ export interface CounterStats {
   trackCount: number;
   /** True while the motion detector is still building its background model. */
   warming: boolean;
+  /** Immediately resets the motion background model (triggers a fresh warmup). */
+  resetBackground: () => void;
 }
 
 interface UseCounterArgs {
@@ -50,7 +52,11 @@ export function useCounter({
   getZoom,
   onCount,
 }: UseCounterArgs): CounterStats {
-  const [stats, setStats] = useState<CounterStats>({
+  const resetBackground = useCallback(() => {
+    motionRef.current.reset();
+  }, []);
+
+  const [stats, setStats] = useState<Omit<CounterStats, "resetBackground">>({
     fps: 0,
     tensors: 0,
     trackCount: 0,
@@ -85,6 +91,7 @@ export function useCounter({
     let lastTracks: Track[] = [];
     const fpsTimes: number[] = [];
     let lastZoom = getZoom();
+    let lastRecalibAt = Date.now();
 
     const loop = async (now: number) => {
       if (stopped) return;
@@ -101,6 +108,15 @@ export function useCounter({
         lastDetect = now;
         try {
           let detections: Detection[];
+
+          // Periodic auto-recalibration: reset background on configured interval.
+          if (useMotion && (s.motionBgResetIntervalMin ?? 0) > 0) {
+            const elapsed = Date.now() - lastRecalibAt;
+            if (elapsed >= s.motionBgResetIntervalMin * 60_000) {
+              motionRef.current.reset();
+              lastRecalibAt = Date.now();
+            }
+          }
 
           const zoom = getZoom();
           if (useMotion) {
@@ -179,7 +195,7 @@ export function useCounter({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model, enabled, videoRef, overlayRef, getSettings, getLine]);
 
-  return stats;
+  return { ...stats, resetBackground };
 }
 
 function captureSnapshot(video: HTMLVideoElement, zoom = 1): string | undefined {

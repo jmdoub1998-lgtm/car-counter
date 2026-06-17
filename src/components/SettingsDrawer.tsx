@@ -97,6 +97,33 @@ export default function SettingsDrawer({
               value={settings.motionSizeScale}
               onChange={(v) => set({ motionSizeScale: v })}
             />
+            <div className="mb-3">
+              <div className="mb-1 text-sm">
+                Auto-recalibrate background:{" "}
+                {settings.motionBgResetIntervalMin === 0
+                  ? "Off"
+                  : `Every ${settings.motionBgResetIntervalMin} min`}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {([0, 10, 20, 30, 60] as const).map((v) => (
+                  <button
+                    key={v}
+                    onClick={() => set({ motionBgResetIntervalMin: v })}
+                    className={`rounded-lg px-3 py-1 text-xs ${
+                      settings.motionBgResetIntervalMin === v
+                        ? "bg-cyan-500 text-slate-900 font-semibold"
+                        : "bg-slate-700 text-slate-300"
+                    }`}
+                  >
+                    {v === 0 ? "Off" : `${v} min`}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-slate-400">
+                Corrects slow lighting drift over a long run. Each reset causes ~1 s of
+                warmup. Manual reset is also in the Tune panel while counting.
+              </p>
+            </div>
             <p className="mt-1 text-xs text-slate-400">
               Vehicle type (car / truck / bus / motorcycle) is estimated from blob size, not
               appearance — counts are reliable, type breakdown is approximate.
